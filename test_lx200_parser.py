@@ -306,55 +306,55 @@ class TestHandleCommand(unittest.TestCase):
         self.assertEqual(result, b"P")
 
     def test_handle_gr_command(self):
-        """Test: #GR# (Get RA)."""
-        result = lx200.handle_command("#GR#", self.state)
+        """Test: #:GR# (Get RA)."""
+        result = lx200.handle_command("#:GR#", self.state)
         self.assertTrue(result.endswith(b"#"))
         self.assertIn(b"05:00:00", result)
 
     def test_handle_gd_command(self):
-        """Test: #GD# (Get DEC)."""
-        result = lx200.handle_command("#GD#", self.state)
+        """Test: #:GD# (Get DEC)."""
+        result = lx200.handle_command("#:GD#", self.state)
         self.assertTrue(result.endswith(b"#"))
         self.assertIn(b"20", result)
 
     def test_handle_gvp_command(self):
-        """Test: #GVP# (Get Produkt-Bezeichnung)."""
-        result = lx200.handle_command("#GVP#", self.state)
+        """Test: #:GVP# (Get Produkt-Bezeichnung)."""
+        result = lx200.handle_command("#:GVP#", self.state)
         self.assertEqual(result, b"TelePico#")
 
     def test_handle_gvn_command(self):
-        """Test: #GVN# (Get Firmware-Version)."""
-        result = lx200.handle_command("#GVN#", self.state)
+        """Test: #:GVN# (Get Firmware-Version)."""
+        result = lx200.handle_command("#:GVN#", self.state)
         self.assertEqual(result, b"1.0#")
 
     def test_handle_sr_command(self):
-        """Test: #Sr...# (Set RA)."""
-        result = lx200.handle_command("#Sr05:30:00#", self.state)
+        """Test: #:Sr...# (Set RA)."""
+        result = lx200.handle_command("#:Sr05:30:00#", self.state)
         self.assertEqual(result, b"1")
         self.assertEqual(self.state.ra_target, "05:30:00")
 
     def test_handle_sd_command(self):
-        """Test: #Sd...# (Set DEC)."""
-        result = lx200.handle_command("#Sd-15:45:30#", self.state)
+        """Test: #:Sd...# (Set DEC)."""
+        result = lx200.handle_command("#:Sd-15:45:30#", self.state)
         self.assertEqual(result, b"1")
         self.assertEqual(self.state.dec_target, "-15:45:30")
 
     def test_handle_sg_command(self):
-        """Test: #SG...# (Set UTC Offset)."""
-        result = lx200.handle_command("#SG-2.0#", self.state)
+        """Test: #:SG...# (Set UTC Offset)."""
+        result = lx200.handle_command("#:SG-2.0#", self.state)
         self.assertEqual(result, b"1")
         self.assertAlmostEqual(self.mock_timeloc.utc_offset, 2.0, places=2)
 
     def test_handle_sl_command_valid(self):
-        """Test: #SL...# (Set Time) gültig."""
-        result = lx200.handle_command("#SL12:34:56#", self.state)
+        """Test: #:SL...# (Set Time) gültig."""
+        result = lx200.handle_command("#:SL12:34:56#", self.state)
         self.assertEqual(result, b"1")
         self.assertEqual(self.state.pending_time, (12, 34, 56))
         self.assertTrue(self.state.time_set)
 
     def test_handle_sc_command_valid(self):
-        """Test: #SC...# (Set Date) gültig."""
-        result = lx200.handle_command("#SC04/15/26#", self.state)
+        """Test: #:SC...# (Set Date) gültig."""
+        result = lx200.handle_command("#:SC04/15/26#", self.state)
         self.assertTrue(result.startswith(b"1"))
         self.assertEqual(self.state.pending_date, (2026, 4, 15))
         self.assertTrue(self.state.date_set)
