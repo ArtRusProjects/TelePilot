@@ -12,16 +12,18 @@ Das System kann astronomische RA/DEC-Ziele empfangen, diese in Alt/Az umrechnen 
 - `main.py`
   - Startet den WLAN-Access-Point
   - Öffnet einen LX200-kompatiblen TCP-Server
-  - Behandelt LX200-Befehle für Positions- und Zeiteinstellungen
-  - Enthält Stub-Funktionen für die Motoransteuerung
+  - Verarbeitet LX200-Befehle über eine zentrale Parser-Schicht
+  - Nutzt `stepper.py` für Motorbewegungen
 
 - `timeloc.py`
   - Rechnet RA/DEC in Alt/Az um
-  - Enthält GMST- und Horzontal-Koordinatenberechnungen
-  - Verwaltung von Standort, Zeit und Tracking-Zustand
+  - Enthält GMST- und Horizontalkoordinatenberechnungen
+  - Verwaltung von Standort, Zeit, Zeitzone und Tracking-Zustand
 
 - `lx200_parser.py`
-  - Parsen und Formatieren von LX200-Zeit-, Datum- und Standortangaben
+  - Zentralisiert die LX200-Kommandoverarbeitung
+  - Formatiert Datum, Uhrzeit, Breitengrad und Längengrad
+  - Nutzt den `timeloc`-Zustand für Antworten und Befehle
 
 - `stepper.py`
   - Schrittberechnung und einfache Steuerung für zwei Steppermotoren
@@ -47,15 +49,25 @@ Das System kann astronomische RA/DEC-Ziele empfangen, diese in Alt/Az umrechnen 
 
 ## Installation
 
-1. MicroPython auf den Pico W laden.
-2. Die Dateien aus diesem Repository auf das Gerät kopieren:
+1. Installiere MicroPython auf dem Raspberry Pi Pico W.
+2. Öffne die MicroPython-Shell oder das Dateimanager-Tool deiner Wahl.
+3. Kopiere die Dateien aus diesem Repository auf den Pico W:
    - `main.py`
    - `timeloc.py`
    - `lx200_parser.py`
    - `stepper.py`
    - `wifi_ap.py`
    - `logging.py`
-3. `main.py` als Startskript ausführen.
+4. Setze `main.py` als Startskript, damit es beim Booten ausgeführt wird.
+
+## Erste Schritte
+
+1. Starte den Pico W und warte, bis der Access Point aktiv ist.
+2. Verbinde dein Gerät mit dem WLAN:
+   - SSID: `TelePico_SkyWatcher`
+   - Passwort: `123456789`
+3. Öffne eine TCP-Verbindung zur IP `192.168.4.1` auf Port `4030`.
+4. Sende LX200-kompatible Befehle.
 
 ## Nutzung
 
@@ -84,10 +96,11 @@ Beispielbefehle:
 
 ## Status und TODOs
 
-- Die Motorsteuerung im `main.py` ist aktuell als Platzhalter implementiert.
-- `timeloc.set_utc_offset()` und `timeloc.set_loc()` sind derzeit noch nicht umgesetzt.
-- `goto_alt_az()` muss für die tatsächliche Ansteuerung der Stepper ergänzt werden.
-- Die meisten Teile sind als Prototyp und als Grundlage für weitere Erweiterungen gedacht.
+- Die LX200-Kommandos werden jetzt zentral in `lx200_parser.py` verarbeitet.
+- `timeloc.set_utc_offset()` und `timeloc.set_loc()` sind implementiert.
+- `main.py` kann Verbindungen dauerhaft akzeptieren und Befehle in einer Schleife verarbeiten.
+- `goto_alt_az()` nutzt jetzt `stepper.move_alt_az()` für relative Bewegungen; eine echte Kalibrierung sollte noch auf das konkrete Montierungs-Setup abgestimmt werden.
+- Tracking und Kalibrierung sind prototypisch und sollten vor dem Einsatz auf der echten Montierung getestet werden.
 
 ## Hinweise
 

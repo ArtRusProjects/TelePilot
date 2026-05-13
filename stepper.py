@@ -1,3 +1,10 @@
+"""Stepper-Konfiguration für die Alt-/Az-Montierung.
+
+Die Funktionen arbeiten mit relativen Winkeländerungen. Ein Aufruf von
+move_alt_az(alt_delta, az_delta) bewegt die Motoren um die angegebenen
+Winkel in Grad.
+"""
+
 from machine import Pin
 import utime
 
@@ -6,15 +13,18 @@ from logging import Logger
 log = Logger("Stepper")
 
 # --- Einstellungen ---
+# Schritte pro Motor-Umdrehung (abhängig von Schrittauflösung / Microstepping)
 STEPS_PER_REV = 400  # 200.0  # anpassen wenn Microstepping genutzt wird
+
+# Übersetzungsverhältnisse für Alt- und Az-Achse
 GEAR_RATIO_ALT = 287.5  # 575.0  # 1:50 + 20:230
 GEAR_RATIO_AZ = 53 * 2  # 53.1  # 10:531 + Microstepping
 
-# --- Motor 1 Pins ---
+# --- Motor 1: Altitude ---
 step1 = Pin(17, Pin.OUT)
 dir1 = Pin(16, Pin.OUT)
 
-# --- Motor 2 Pins ---
+# --- Motor 2: Azimut ---
 step2 = Pin(19, Pin.OUT)
 dir2 = Pin(18, Pin.OUT)
 

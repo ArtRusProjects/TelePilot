@@ -185,10 +185,13 @@ class timeloc:
         log.info(f"RTC gesetzt: {RTC().datetime()}")
 
     def set_utc_offset(self, offset):
-        pass
+        self.utc_offset = offset
+        log.info(f"UTC offset gesetzt: {self.utc_offset}")
 
     def set_loc(self, latitude, longitude):
-        pass
+        self.latitude = latitude
+        self.longitude = longitude
+        log.info(f"Standort gesetzt: lat={self.latitude}, lon={self.longitude}")
 
     def ra_dec_to_alt_az(self, ra: str, dec: str):
         # input RA/DEC as # "06:45:07",# "-16:43:42",
