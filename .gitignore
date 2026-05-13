@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.eggs/
+.python-version
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Tests and coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Logs
+*.log
+
+# Environment
+env/
+venv/
+.venv/
