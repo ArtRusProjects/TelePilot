@@ -230,7 +230,17 @@ def handle_command(command, state, goto_callback=None):
             return b"0"
 
     if body == "CM":
-        _execute_goto(state, goto_callback)
+        # Sync calibration: set current position to target and start tracking
+        if state.ra_target and state.dec_target:
+            state.current_ra = state.ra_target
+            state.current_dec = state.dec_target
+            alt, az = state.tl.ra_dec_to_alt_az(state.ra_target, state.dec_target)
+            state.current_alt = alt
+            state.current_az = az
+            state.tl.set_calibration_point()
+            state.tl.start_tracking()
+            state.ra_target = None
+            state.dec_target = None
         return b"0"
 
     if body.startswith("Q"):
