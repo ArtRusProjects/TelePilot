@@ -15,7 +15,7 @@ def parse_time(time_str):
 
 
 def format_lat(deg):
-    """Formatiert Breitengrad für LX200 (#Gt#) als +DD*MM#. """
+    """Formatiert Breitengrad für LX200 (#Gt#) als +DD*MM#."""
     sign = "+" if deg >= 0 else "-"
     deg = abs(deg)
     d = int(deg)
@@ -24,7 +24,7 @@ def format_lat(deg):
 
 
 def format_lon(deg):
-    """Formatiert Längengrad für LX200 (#Gg#) als +DDD*MM#. """
+    """Formatiert Längengrad für LX200 (#Gg#) als +DDD*MM#."""
     deg = -deg
     sign = "+" if deg >= 0 else "-"
     deg = abs(deg)
@@ -138,7 +138,7 @@ def handle_command(command, state, goto_callback=None):
     if not command.startswith("#") or not command.endswith("#"):
         return None
 
-    body = command[1:-1]
+    body = command[2:-1]
 
     if body == "GR":
         return format_ra_lx200(state.current_ra).encode()

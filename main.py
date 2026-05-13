@@ -68,9 +68,14 @@ def handle_client(conn, addr, state):
             commands, buffer = extract_lx200_messages(buffer)
 
             for command in commands:
-                log.debug("Empfangenes LX200-Kommando: %s", command)
-                response = lx200.handle_command(command, state, goto_callback=goto_alt_az)
+                if command not in ["#:GR#", "#:GW#", "#:GD#", "#:D#"]:
+                    log.debug("Empfangenes LX200-Kommando: %s", command)
+                response = lx200.handle_command(
+                    command, state, goto_callback=goto_alt_az
+                )
                 if response is not None:
+                    if command not in ["#:GR#", "#:GW#", "#:GD#", "#:D#"]:
+                        log.debug("Antwort LX200: %s", response)
                     conn.send(response)
     except Exception as exc:
         log.error("Fehler in Verbindung %s: %s", addr, exc)
