@@ -1,4 +1,7 @@
 import math
+from logging import Logger
+
+log = Logger("LX200Parser")
 
 
 def parse_date(date_str):
@@ -230,7 +233,9 @@ def handle_command(command, state, goto_callback=None):
             return b"0"
 
     if body == "CM":
-        # Calibration/sync: record current mount position for the current RA/DEC target.
+        # Calibration/Tracking mode selection via button on Pin 20
+        # Button pressed: record calibration point
+        # Button not pressed: start tracking with existing calibration
         if state.ra_target and state.dec_target:
             state.current_ra = state.ra_target
             state.current_dec = state.dec_target
@@ -241,19 +246,35 @@ def handle_command(command, state, goto_callback=None):
 
             actual_alt = state.current_alt
             actual_az = state.current_az
-            if (
-                not state.tl.calibration_points
-                and abs(actual_alt - alt) < 1e-6
-                and abs(_angle_diff(actual_az, az)) < 1e-6
-            ):
-                actual_alt = alt
-                actual_az = az
 
-            state.tl.add_calibration_point(
-                state.ra_target, state.dec_target, actual_alt, actual_az
-            )
-            state.current_alt = actual_alt
-            state.current_az = actual_az
+            # If button is pressed: record calibration point
+            if state.tl.is_calibration_button_pressed():
+                if (
+                    not state.tl.calibration_points
+                    and abs(actual_alt - alt) < 1e-6
+                    and abs(_angle_diff(actual_az, az)) < 1e-6
+                ):
+                    actual_alt = alt
+                    actual_az = az
+
+                state.tl.add_calibration_point(
+                    state.ra_target, state.dec_target, actual_alt, actual_az
+                )
+                state.current_alt = actual_alt
+                state.current_az = actual_az
+                log.info(
+                    "Calibration point %d recorded at RA=%s, DEC=%s",
+                    len(state.tl.calibration_points),
+                    state.ra_target,
+                    state.dec_target,
+                )
+            else:
+                log.info(
+                    "Tracking mode activated at RA=%s, DEC=%s (button not pressed)",
+                    state.ra_target,
+                    state.dec_target,
+                )
+
             state.tl.start_tracking()
             state.ra_target = None
             state.dec_target = None

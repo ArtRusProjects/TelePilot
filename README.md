@@ -43,9 +43,11 @@ Das System kann astronomische RA/DEC-Ziele empfangen, diese in Alt/Az umrechnen 
 - Raspberry Pi Pico W mit MicroPython
 - MicroPython-Umgebung mit Netzwerk-Unterstützung
 - Zwei Steppermotoren und passende Treiber für Alt- und Az-Achse
+- Kalibrierungs-Taster an Pin 20 (verbunden zu GND bei Betätigung)
 - Passende Verdrahtung der GPIO-Pins:
   - Alt-Step: Pin 17, Dir: Pin 16
   - Az-Step: Pin 19, Dir: Pin 18
+  - Kalibrierungs-Taster: Pin 20 → GND
 
 ## Installation
 
@@ -93,14 +95,43 @@ Beispielbefehle:
 - `:SLHH:MM:SS#` - Uhrzeit setzen
 - `:SCMM/DD/YY#` - Datum setzen
 - `:St±DD*MM#` - Breitengrad setzen
+- `:CM#` - Kalibrierungspunkt setzen / 2-Stern-Kalibrierung
+
+## 2-Stern-Kalibrierung
+
+Das Projekt unterstützt jetzt einen einfachen 2-Stern-Kalibrierungsablauf über das LX200-Kommando `:CM#`.
+
+### Hardwarevoraussetzung
+- Kalibrierungs-Taster an Pin 20 angeschlossen (zu GND bei Betätigung)
+- Der Taster wird über PULL_UP gelesen (gedrückt = GND = Wert 0)
+
+### Kalibrierungsablauf
+
+**Mit Taster gedrückt: Kalibrierungspunkt speichern**
+1. Setze mit `:Sr...#` und `:Sd...#` den ersten Stern als Ziel
+2. Richte die Montierung manuell auf den ersten Stern aus
+3. **Halte den Taster an Pin 20 gedrückt** und sende `:CM#`
+   - Kalibrierungspunkt wird gespeichert
+   - Tracking startet
+4. Wiederhole Schritte 1-3 für einen zweiten Stern
+5. Nach dem zweiten Punkt mit gedrücktem Taster: Das System berechnet die Alt/Az-Offsets automatisch
+
+**Ohne Taster gedrückt: Nur Tracking starten**
+- Sende `:CM#` ohne Taster zu drücken → Tracking startet mit bestehenden Kalibrierungspunkten
+- Dies verhindert, dass die Kalibrierung durch wiederholte CM-Befehle verfälscht wird
+
+### Ergebnis
+Nach zwei Kalibrierungspunkten werden alle weiteren Zielberechnungen mit den errechneten Alt/Az-Offsets korrigiert.
 
 ## Status und TODOs
 
 - Die LX200-Kommandos werden jetzt zentral in `lx200_parser.py` verarbeitet.
 - `timeloc.set_utc_offset()` und `timeloc.set_loc()` sind implementiert.
 - `main.py` kann Verbindungen dauerhaft akzeptieren und Befehle in einer Schleife verarbeiten.
-- `goto_alt_az()` nutzt jetzt `stepper.move_alt_az()` für relative Bewegungen; eine echte Kalibrierung sollte noch auf das konkrete Montierungs-Setup abgestimmt werden.
-- Tracking und Kalibrierung sind prototypisch und sollten vor dem Einsatz auf der echten Montierung getestet werden.
+- `goto_alt_az()` nutzt jetzt `stepper.move_alt_az()` für relative Bewegungen.
+- `:CM#` kann jetzt zwei Kalibrierungspunkte aufnehmen (bei gedrücktem Taster an Pin 20) und einen einfachen Alt/Az-Offset berechnen.
+- `:CM#` ohne Taster startet nur Tracking mit bestehenden Kalibrierungspunkten (verhindert Kalibrierungsverfälschung).
+- Tracking und Kalibrierung sind weiterhin prototypisch und sollten vor dem Einsatz auf der echten Montierung getestet werden.
 
 ## Hinweise
 

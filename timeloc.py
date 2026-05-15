@@ -1,4 +1,4 @@
-from machine import RTC
+from machine import RTC, Pin
 from logging import Logger
 import math
 import stepper
@@ -12,6 +12,9 @@ log = Logger("TimeLoc")
 _thread.stack_size(5 * 1024)  # to avoid RuntimeError: maximum recursion depth exceeded
 
 GMST_PER_SEC = 360.98564736629 / 86400.0
+
+# Kalibrierungstaster auf Pin 20 (verbunden mit GND)
+calibration_button = Pin(20, Pin.IN, Pin.PULL_UP)
 
 
 # -----------------------------
@@ -200,6 +203,10 @@ class timeloc:
         self.latitude = latitude
         self.longitude = longitude
         log.info(f"Standort gesetzt: lat={self.latitude}, lon={self.longitude}")
+
+    def is_calibration_button_pressed(self):
+        """Check if calibration button on Pin 20 is pressed (connected to GND)."""
+        return not calibration_button.value()
 
     def reset_calibration(self):
         self.calibration_points = []

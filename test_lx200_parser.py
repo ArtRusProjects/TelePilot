@@ -36,8 +36,29 @@ class StubRTC:
         return self._dt
 
 
+class StubPin:
+    """Stub für GPIO Pin, simuliert Tastenzustände."""
+
+    _button_state = 1  # 1 = nicht gedrückt (PULL_UP), 0 = gedrückt (zu GND)
+
+    def __init__(self, pin, mode, pull=None):
+        self.pin = pin
+
+    def value(self):
+        return StubPin._button_state
+
+    @classmethod
+    def set_button_pressed(cls, pressed):
+        """Test-Hilfsmethode zum Setzen des Tastenzustands."""
+        cls._button_state = 0 if pressed else 1
+
+
 sys.modules["machine"] = types.ModuleType("machine")
 sys.modules["machine"].RTC = StubRTC
+sys.modules["machine"].Pin = StubPin
+sys.modules["machine"].Pin.IN = 0
+sys.modules["machine"].Pin.OUT = 1
+sys.modules["machine"].Pin.PULL_UP = 1
 sys.modules["network"] = types.ModuleType("network")
 sys.modules["stepper"] = types.ModuleType("stepper")
 
@@ -441,6 +462,130 @@ class TestTimelocCalibration(unittest.TestCase):
 
         self.assertAlmostEqual(calibrated_alt, ideal_alt + 1.0, places=5)
         self.assertAlmostEqual(calibrated_az, (ideal_az + 2.0) % 360, places=5)
+
+    def test_calibration_button_pressed_state(self):
+        """Test: Kalibrierungs-Tastenzustand kann abgefragt werden."""
+        StubPin.set_button_pressed(False)
+        self.assertFalse(self.tl.is_calibration_button_pressed())
+
+        StubPin.set_button_pressed(True)
+        self.assertTrue(self.tl.is_calibration_button_pressed())
+
+
+class TestCMCommandWithButton(unittest.TestCase):
+    """Tests für CM-Befehl mit Button-abhängiger Logik."""
+
+    def setUp(self):
+        """Mock timeloc mit Button-Unterstützung."""
+
+        class MockTimeloc:
+            def __init__(self):
+                self.latitude = 49.68
+                self.longitude = -8.62
+                self.utc_offset = 2.0
+                self.cont_mv = False
+                self.cont_mv_step = False
+                self.cont_mv_speed = 3
+                self.calibration_points = []
+                self.calibration_model = {"alt_offset": 0.0, "az_offset": 0.0}
+                self.is_calibrated = False
+
+            def get_localtime(self):
+                return (2026, 4, 2, 3, 21, 41, 59, 0)
+
+            def ra_dec_to_alt_az(self, ra, dec, apply_calibration=True):
+                return 45.0, 90.0
+
+            def update_rtc(self, *args):
+                pass
+
+            def set_utc_offset(self, offset):
+                self.utc_offset = offset
+
+            def set_loc(self, lat, lon):
+                self.latitude = lat
+                self.longitude = lon
+
+            def stop_tracking(self):
+                pass
+
+            def start_tracking(self):
+                pass
+
+            def is_calibration_button_pressed(self):
+                return StubPin._button_state == 0
+
+            def add_calibration_point(self, ra, dec, actual_alt, actual_az):
+                self.calibration_points.append(
+                    {
+                        "ra": ra,
+                        "dec": dec,
+                        "actual_alt": actual_alt,
+                        "actual_az": actual_az,
+                    }
+                )
+
+            def start_cont_mv(self, dir):
+                pass
+
+            def movement_step(self, dir):
+                pass
+
+            def run_goto(self):
+                pass
+
+        self.mock_timeloc = MockTimeloc()
+        self.state = lx200.LX200State(self.mock_timeloc)
+
+    def test_cm_with_button_pressed_adds_calibration_point(self):
+        """Test: CM mit Taster gedrückt speichert Kalibrierungspunkt."""
+        StubPin.set_button_pressed(True)
+        self.state.ra_target = "05:00:00"
+        self.state.dec_target = "+20:00:00"
+        self.state.current_alt = 45.0
+        self.state.current_az = 90.0
+
+        result = lx200.handle_command("#:CM#", self.state)
+
+        self.assertEqual(result, b"0")
+        self.assertEqual(len(self.state.tl.calibration_points), 1)
+        self.assertIsNone(self.state.ra_target)
+        self.assertIsNone(self.state.dec_target)
+
+    def test_cm_without_button_pressed_skips_calibration(self):
+        """Test: CM ohne Taster startet nur Tracking, speichert keine Kalibrierung."""
+        StubPin.set_button_pressed(False)
+        self.state.ra_target = "05:00:00"
+        self.state.dec_target = "+20:00:00"
+        self.state.current_alt = 45.0
+        self.state.current_az = 90.0
+
+        result = lx200.handle_command("#:CM#", self.state)
+
+        self.assertEqual(result, b"0")
+        self.assertEqual(len(self.state.tl.calibration_points), 0)
+        self.assertIsNone(self.state.ra_target)
+        self.assertIsNone(self.state.dec_target)
+
+    def test_cm_two_calibration_points_on_consecutive_button_presses(self):
+        """Test: Zwei nacheinanderfolgende CM mit Taster speichern zwei Punkte."""
+        StubPin.set_button_pressed(True)
+
+        # Erstes CM
+        self.state.ra_target = "05:00:00"
+        self.state.dec_target = "+20:00:00"
+        self.state.current_alt = 45.0
+        self.state.current_az = 90.0
+        lx200.handle_command("#:CM#", self.state)
+
+        # Zweites CM
+        self.state.ra_target = "06:00:00"
+        self.state.dec_target = "+21:00:00"
+        self.state.current_alt = 50.0
+        self.state.current_az = 95.0
+        lx200.handle_command("#:CM#", self.state)
+
+        self.assertEqual(len(self.state.tl.calibration_points), 2)
 
 
 if __name__ == "__main__":
