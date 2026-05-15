@@ -6,6 +6,7 @@ Ausführung: python3 test_lx200_parser.py
 """
 
 import sys
+import types
 import unittest
 
 
@@ -25,14 +26,40 @@ class StubLogger:
         pass
 
 
-sys.modules["machine"] = None  # Mock MicroPython-Module
-sys.modules["network"] = None
+class StubRTC:
+    def __init__(self):
+        self._dt = (2026, 4, 2, 3, 21, 41, 59, 0)
+
+    def datetime(self, *args):
+        if args:
+            self._dt = args[0]
+        return self._dt
+
+
+sys.modules["machine"] = types.ModuleType("machine")
+sys.modules["machine"].RTC = StubRTC
+sys.modules["network"] = types.ModuleType("network")
+sys.modules["stepper"] = types.ModuleType("stepper")
+
+sys.modules["stepper"].slew_rate_to_us = lambda slew_rate: 1000
+sys.modules[
+    "stepper"
+].move_alt_az = lambda alt_angle, az_angle, delay_us=2000, rest_steps=(0, 0): (
+    0.0,
+    0.0,
+)
+sys.modules["stepper"].move_alt = lambda alt_angle, delay_us=1000: None
+sys.modules["stepper"].move_az = lambda az_angle, delay_us=2000: None
+
+sys.modules["_thread"] = types.ModuleType("_thread")
+sys.modules["_thread"].stack_size = lambda size: None
+sys.modules["_thread"].start_new_thread = lambda target, args: None
 
 # Mock das Logger-Modul
-sys.modules["logging"] = type(sys)("logging")
+sys.modules["logging"] = types.ModuleType("logging")
 sys.modules["logging"].Logger = StubLogger
 
-# Jetzt können wir lx200_parser importieren
+import timeloc as tl
 import lx200_parser as lx200
 
 
@@ -363,6 +390,57 @@ class TestHandleCommand(unittest.TestCase):
         """Test: Ungültiger Befehl."""
         result = lx200.handle_command("#INVALID#", self.state)
         self.assertEqual(result, b"0#")
+
+
+class TestTimelocCalibration(unittest.TestCase):
+    """Tests für die 2-Stern-Kalibrierung in timeloc."""
+
+    def setUp(self):
+        self.tl = tl.timeloc()
+        self.tl.latitude = 49.0
+        self.tl.longitude = 8.0
+        self.tl.utc_offset = 2
+
+    def test_single_calibration_point_sets_offsets(self):
+        ideal_alt, ideal_az = self.tl.ideal_alt_az("05:00:00", "+20:00:00")
+        self.tl.add_calibration_point(
+            "05:00:00", "+20:00:00", ideal_alt + 1.0, (ideal_az + 2.0) % 360
+        )
+
+        self.assertTrue(self.tl.is_calibrated)
+        self.assertAlmostEqual(self.tl.calibration_model["alt_offset"], 1.0, places=5)
+        self.assertAlmostEqual(self.tl.calibration_model["az_offset"], 2.0, places=5)
+
+    def test_two_point_calibration_applies_average_offset(self):
+        ideal_alt_1, ideal_az_1 = self.tl.ideal_alt_az("05:00:00", "+20:00:00")
+        ideal_alt_2, ideal_az_2 = self.tl.ideal_alt_az("06:00:00", "+21:00:00")
+
+        self.tl.add_calibration_point(
+            "05:00:00", "+20:00:00", ideal_alt_1 + 1.0, (ideal_az_1 + 2.0) % 360
+        )
+        self.tl.add_calibration_point(
+            "06:00:00", "+21:00:00", ideal_alt_2 + 1.0, (ideal_az_2 + 2.0) % 360
+        )
+
+        corrected_alt, corrected_az = self.tl.apply_calibration(ideal_alt_2, ideal_az_2)
+
+        self.assertAlmostEqual(self.tl.calibration_model["alt_offset"], 1.0, places=5)
+        self.assertAlmostEqual(self.tl.calibration_model["az_offset"], 2.0, places=5)
+        self.assertAlmostEqual(corrected_alt, ideal_alt_2 + 1.0, places=5)
+        self.assertAlmostEqual(corrected_az, (ideal_az_2 + 2.0) % 360, places=5)
+
+    def test_ra_dec_to_alt_az_applies_calibration_if_enabled(self):
+        ideal_alt, ideal_az = self.tl.ideal_alt_az("05:00:00", "+20:00:00")
+        self.tl.add_calibration_point(
+            "05:00:00", "+20:00:00", ideal_alt + 1.0, (ideal_az + 2.0) % 360
+        )
+
+        calibrated_alt, calibrated_az = self.tl.ra_dec_to_alt_az(
+            "05:00:00", "+20:00:00"
+        )
+
+        self.assertAlmostEqual(calibrated_alt, ideal_alt + 1.0, places=5)
+        self.assertAlmostEqual(calibrated_az, (ideal_az + 2.0) % 360, places=5)
 
 
 if __name__ == "__main__":

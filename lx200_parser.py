@@ -230,14 +230,30 @@ def handle_command(command, state, goto_callback=None):
             return b"0"
 
     if body == "CM":
-        # Sync calibration: set current position to target and start tracking
+        # Calibration/sync: record current mount position for the current RA/DEC target.
         if state.ra_target and state.dec_target:
             state.current_ra = state.ra_target
             state.current_dec = state.dec_target
-            alt, az = state.tl.ra_dec_to_alt_az(state.ra_target, state.dec_target)
-            state.current_alt = alt
-            state.current_az = az
-            state.tl.set_calibration_point()
+
+            alt, az = state.tl.ra_dec_to_alt_az(
+                state.ra_target, state.dec_target, apply_calibration=False
+            )
+
+            actual_alt = state.current_alt
+            actual_az = state.current_az
+            if (
+                not state.tl.calibration_points
+                and abs(actual_alt - alt) < 1e-6
+                and abs(_angle_diff(actual_az, az)) < 1e-6
+            ):
+                actual_alt = alt
+                actual_az = az
+
+            state.tl.add_calibration_point(
+                state.ra_target, state.dec_target, actual_alt, actual_az
+            )
+            state.current_alt = actual_alt
+            state.current_az = actual_az
             state.tl.start_tracking()
             state.ra_target = None
             state.dec_target = None

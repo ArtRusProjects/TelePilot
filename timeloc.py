@@ -139,6 +139,8 @@ class timeloc:
 
         self.target_az = 0
         self.target_alt = 0
+        self.target_az_raw = 0
+        self.target_alt_raw = 0
         self.current_az = 0
         self.current_alt = 0
         self.current_gmst = 0
@@ -151,6 +153,12 @@ class timeloc:
         self.movement_active = False
         self.is_calibrated = False
         self.stop_movement = False
+
+        self.calibration_points = []
+        self.calibration_model = {
+            "alt_offset": 0.0,
+            "az_offset": 0.0,
+        }
 
         self.cont_mv = False
         self.cont_mv_step = False
@@ -193,8 +201,89 @@ class timeloc:
         self.longitude = longitude
         log.info(f"Standort gesetzt: lat={self.latitude}, lon={self.longitude}")
 
-    def ra_dec_to_alt_az(self, ra: str, dec: str):
-        # input RA/DEC as # "06:45:07",# "-16:43:42",
+    def reset_calibration(self):
+        self.calibration_points = []
+        self.calibration_model = {
+            "alt_offset": 0.0,
+            "az_offset": 0.0,
+        }
+        self.is_calibrated = False
+        log.info("Calibration reset")
+
+    def _angle_diff(self, a, b):
+        d = a - b
+        if d > 180:
+            d -= 360
+        if d < -180:
+            d += 360
+        return d
+
+    def ideal_alt_az(self, ra: str, dec: str):
+        ra_deg = ra_to_deg(ra)
+        dec_deg = dec_to_deg(dec)
+        gmst, (alt, az) = radec_to_altaz(
+            ra_deg=ra_deg,
+            dec_deg=dec_deg,
+            local_time=self.get_localtime(),
+            lat_deg=self.latitude,
+            lon_deg=self.longitude,
+            utc_offset=self.utc_offset,
+        )
+        return alt, az
+
+    def apply_calibration(self, alt: float, az: float):
+        if not self.is_calibrated:
+            return alt, az
+
+        alt += self.calibration_model["alt_offset"]
+        az = (az + self.calibration_model["az_offset"]) % 360
+        return alt, az
+
+    def compute_calibration(self):
+        count = len(self.calibration_points)
+        if count == 0:
+            self.calibration_model["alt_offset"] = 0.0
+            self.calibration_model["az_offset"] = 0.0
+            self.is_calibrated = False
+            return
+
+        alt_errors = [
+            point["actual_alt"] - point["ideal_alt"]
+            for point in self.calibration_points
+        ]
+        az_errors = [
+            self._angle_diff(point["actual_az"], point["ideal_az"])
+            for point in self.calibration_points
+        ]
+
+        self.calibration_model["alt_offset"] = sum(alt_errors) / len(alt_errors)
+        self.calibration_model["az_offset"] = sum(az_errors) / len(az_errors)
+        self.is_calibrated = True
+        log.info(
+            "Calibration computed: alt_offset=%0.4f, az_offset=%0.4f",
+            self.calibration_model["alt_offset"],
+            self.calibration_model["az_offset"],
+        )
+
+    def add_calibration_point(
+        self, ra: str, dec: str, actual_alt: float, actual_az: float
+    ):
+        ideal_alt, ideal_az = self.ideal_alt_az(ra, dec)
+        self.calibration_points.append(
+            {
+                "ra": ra,
+                "dec": dec,
+                "ideal_alt": ideal_alt,
+                "ideal_az": ideal_az,
+                "actual_alt": actual_alt,
+                "actual_az": actual_az,
+            }
+        )
+        if len(self.calibration_points) > 2:
+            self.calibration_points = self.calibration_points[-2:]
+        self.compute_calibration()
+
+    def ra_dec_to_alt_az(self, ra: str, dec: str, apply_calibration=True):
         ra_deg = ra_to_deg(ra)
         dec_deg = dec_to_deg(dec)
 
@@ -211,18 +300,28 @@ class timeloc:
         self.current_dec = dec
         self.current_ra_deg = ra_deg
         self.current_dec_deg = dec_deg
-        self.target_az = az
-        self.target_alt = alt
         self.current_gmst = gmst
+        self.target_alt_raw = alt
+        self.target_az_raw = az
+
+        if apply_calibration:
+            alt, az = self.apply_calibration(alt, az)
+
+        self.target_alt = alt
+        self.target_az = az
         return alt, az
 
     def set_calibration_point(self):
         log.info("Calibration point is set")
-        self.current_alt = self.target_alt
-        self.current_az = self.target_az
-        self.is_calibrated = True
+        self.add_calibration_point(
+            self.current_ra, self.current_dec, self.current_alt, self.current_az
+        )
 
     def start_tracking(self):
+        if self.tracking_active:
+            log.debug("Tracking already active")
+            return
+
         self.tracking_active = True
         self.stop_movement = False
         # TODO: Thread loop?
@@ -300,11 +399,12 @@ class timeloc:
             # nächste Sekunde
             self.current_gmst = (self.current_gmst + GMST_PER_SEC) % 360
 
-            lst = (self.current_gmst + 8.62) % 360
+            lst = (self.current_gmst + self.longitude) % 360
             ha = (lst - self.current_ra_deg) % 360
-            self.target_alt, self.target_az = equatorial_to_horizontal(
+            raw_alt, raw_az = equatorial_to_horizontal(
                 ha, self.current_dec_deg, self.latitude
             )
+            self.target_alt, self.target_az = self.apply_calibration(raw_alt, raw_az)
 
             step_alt = angle_diff(self.target_alt, self.current_alt)  # + rest1
             step_az = angle_diff(self.target_az, self.current_az)  # + rest2
