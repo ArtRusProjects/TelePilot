@@ -80,7 +80,7 @@ sys.modules["_thread"].start_new_thread = lambda target, args: None
 sys.modules["logging"] = types.ModuleType("logging")
 sys.modules["logging"].Logger = StubLogger
 
-import timeloc as tl
+import dev_ctrl as tl
 import lx200_parser as lx200
 
 

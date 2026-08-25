@@ -1,10 +1,12 @@
 import socket
 from logging import Logger
 from machine import Pin
-from timeloc import timeloc
+
+from dev_ctrl import dev_ctrl
 import wifi_ap
 import lx200_parser as lx200
-import stepper
+
+# import stepper
 
 log = Logger("Main")
 
@@ -13,15 +15,6 @@ SSID = "TelePico_SkyWatcher"
 PASSWORD = "123456789"
 
 pinLED = Pin("LED", Pin.OUT)
-
-
-def goto_alt_az(delta_alt, delta_az):
-    log.info("GoTo delta Alt=%0.3f°, Az=%0.3f°", delta_alt, delta_az)
-    try:
-        stepper.move_alt_az(delta_alt, delta_az)
-        log.info("Stepper move completed")
-    except Exception as exc:
-        log.error("Stepper move failed: %s", exc)
 
 
 def extract_lx200_messages(buffer):
@@ -52,9 +45,10 @@ def extract_lx200_messages(buffer):
     return messages, buffer
 
 
-def handle_client(conn, addr, state):
+def handle_client(conn, addr, state: lx200.LX200State):
     log.info("Verbindung angenommen: %s", addr)
     buffer = ""
+    not_shown_commands = ["#:GR#", "#:GW#", "#:GD#", "#:D#"]
 
     try:
         while True:
@@ -68,15 +62,14 @@ def handle_client(conn, addr, state):
             commands, buffer = extract_lx200_messages(buffer)
 
             for command in commands:
-                if command not in ["#:GR#", "#:GW#", "#:GD#", "#:D#"]:
+                if command not in not_shown_commands:
                     log.debug("Empfangenes LX200-Kommando: %s", command)
-                response = lx200.handle_command(
-                    command, state, goto_callback=goto_alt_az
-                )
+                response = lx200.handle_command(command, state)
                 if response is not None:
-                    if command not in ["#:GR#", "#:GW#", "#:GD#", "#:D#"]:
+                    if command not in not_shown_commands:
                         log.debug("Antwort LX200: %s", response)
                     conn.send(response)
+
     except Exception as exc:
         log.error("Fehler in Verbindung %s: %s", addr, exc)
     finally:
@@ -85,7 +78,7 @@ def handle_client(conn, addr, state):
         log.info("Verbindung getrennt: %s", addr)
 
 
-def run_server(state):
+def run_server(state: lx200.LX200State):
     server_socket = socket.socket()
     server_socket.bind(("0.0.0.0", PORT))
     server_socket.listen(1)
@@ -98,12 +91,17 @@ def run_server(state):
             handle_client(conn, addr, state)
         except Exception as exc:
             log.error("Server-Fehler: %s", exc)
-            continue
+            # continue
+        finally:
+            server_socket.close()
+            log.info("Server-Socket geschlossen")
+            break
 
 
 if __name__ == "__main__":
     wifi_ap.setup_access_point(ssid=SSID, pw=PASSWORD)
 
-    tl = timeloc()
-    state = lx200.LX200State(tl)
-    run_server(state)
+    device = dev_ctrl()
+    lx200_state = lx200.LX200State(device)
+
+    run_server(lx200_state)

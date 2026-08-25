@@ -1,5 +1,6 @@
 import math
 from logging import Logger
+from dev_ctrl import dev_ctrl
 
 log = Logger("LX200Parser")
 
@@ -86,49 +87,47 @@ def _angle_diff(a, b):
 
 
 class LX200State:
-    def __init__(self, timeloc):
-        self.tl = timeloc
+    def __init__(self, device: dev_ctrl):
+        self.device = device
         self.ra_target = None
         self.dec_target = None
-        self.pending_time = None
-        self.pending_date = None
+        self.pending_time: tuple[int, int, int] = (0, 0, 0)
+        self.pending_date: tuple[int, int, int] = (2000, 1, 1)
         self.time_set = False
         self.date_set = False
         self.current_ra = "05:00:00"
         self.current_dec = "+20:00:00"
-        self.current_alt = 0.0
-        self.current_az = 0.0
+        # self.current_alt = 0.0
+        # self.current_az = 0.0
 
 
-def _apply_rtc_update(state):
+def _apply_rtc_update(state: LX200State):
     if state.time_set and state.date_set:
         year, month, day = state.pending_date
         hour, minute, second = state.pending_time
-        state.tl.update_rtc(year, month, day, hour, minute, second)
+        state.device.update_rtc(year, month, day, hour, minute, second)
         state.time_set = False
         state.date_set = False
 
 
-def _execute_goto(state, goto_callback):
+def _execute_goto(state: LX200State):
     if state.ra_target is None or state.dec_target is None:
         return
 
-    alt, az = state.tl.ra_dec_to_alt_az(state.ra_target, state.dec_target)
-    delta_alt = _angle_diff(alt, state.current_alt)
-    delta_az = _angle_diff(az, state.current_az)
+    alt, az = state.device.ra_dec_to_alt_az(state.ra_target, state.dec_target)
 
-    if goto_callback:
-        goto_callback(delta_alt, delta_az)
+    state.device.target_alt = alt
+    state.device.target_az = az
 
-    state.current_alt = alt
-    state.current_az = az
+    state.device.run_goto()
+
     state.current_ra = state.ra_target
     state.current_dec = state.dec_target
     state.ra_target = None
     state.dec_target = None
 
 
-def handle_command(command, state, goto_callback=None):
+def handle_command(command, state: LX200State):
     if command == "Ka":
         return None
 
@@ -156,25 +155,25 @@ def handle_command(command, state, goto_callback=None):
         return b"1.0#"
 
     if body == "GVD":
-        return format_date_lx200(state.tl.get_localtime()).encode()
+        return format_date_lx200(state.device.get_localtime()).encode()
 
     if body == "GVT":
-        return format_time_lx200(state.tl.get_localtime()).encode()
+        return format_time_lx200(state.device.get_localtime()).encode()
 
     if body == "Gg":
-        return format_lon(state.tl.longitude).encode()
+        return format_lon(state.device.longitude).encode()
 
     if body == "Gt":
-        return format_lat(state.tl.latitude).encode()
+        return format_lat(state.device.latitude).encode()
 
     if body == "GC":
-        return format_date_lx200(state.tl.get_localtime()).encode()
+        return format_date_lx200(state.device.get_localtime()).encode()
 
     if body == "GL":
-        return format_time_lx200(state.tl.get_localtime()).encode()
+        return format_time_lx200(state.device.get_localtime()).encode()
 
     if body == "GG":
-        return ("%+0.1f#" % (-state.tl.utc_offset)).encode()
+        return ("%+0.1f#" % (-state.device.utc_offset)).encode()
 
     if body == "GW":
         return b"AltAz Tracking#"
@@ -193,7 +192,7 @@ def handle_command(command, state, goto_callback=None):
     if body.startswith("SG"):
         try:
             val = float(body[2:])
-            state.tl.set_utc_offset(-val)
+            state.device.set_utc_offset(-val)
             return b"1"
         except Exception:
             return b"0"
@@ -219,7 +218,7 @@ def handle_command(command, state, goto_callback=None):
     if body.startswith("St"):
         try:
             latitude = parse_lat(body[2:])
-            state.tl.set_loc(latitude, state.tl.longitude)
+            state.device.set_loc(latitude, state.device.longitude)
             return b"1"
         except Exception:
             return b"0"
@@ -227,7 +226,7 @@ def handle_command(command, state, goto_callback=None):
     if body.startswith("Sg"):
         try:
             longitude = parse_lon(body[2:])
-            state.tl.set_loc(state.tl.latitude, longitude)
+            state.device.set_loc(state.device.latitude, longitude)
             return b"1"
         except Exception:
             return b"0"
@@ -240,31 +239,31 @@ def handle_command(command, state, goto_callback=None):
             state.current_ra = state.ra_target
             state.current_dec = state.dec_target
 
-            alt, az = state.tl.ra_dec_to_alt_az(
+            alt, az = state.device.ra_dec_to_alt_az(
                 state.ra_target, state.dec_target, apply_calibration=False
             )
 
-            actual_alt = state.current_alt
-            actual_az = state.current_az
+            actual_alt = state.device.current_alt
+            actual_az = state.device.current_az
 
             # If button is pressed: record calibration point
-            if state.tl.is_calibration_button_pressed():
+            if state.device.is_calibration_button_pressed():
                 if (
-                    not state.tl.calibration_points
+                    not state.device.calibration_points
                     and abs(actual_alt - alt) < 1e-6
                     and abs(_angle_diff(actual_az, az)) < 1e-6
                 ):
                     actual_alt = alt
                     actual_az = az
 
-                state.tl.add_calibration_point(
+                state.device.add_calibration_point(
                     state.ra_target, state.dec_target, actual_alt, actual_az
                 )
-                state.current_alt = actual_alt
-                state.current_az = actual_az
+                state.device.current_alt = actual_alt
+                state.device.current_az = actual_az
                 log.info(
                     "Calibration point %d recorded at RA=%s, DEC=%s",
-                    len(state.tl.calibration_points),
+                    len(state.device.calibration_points),
                     state.ra_target,
                     state.dec_target,
                 )
@@ -274,34 +273,48 @@ def handle_command(command, state, goto_callback=None):
                     state.ra_target,
                     state.dec_target,
                 )
+                if not state.device.is_calibrated:
+                    log.warning(
+                        "No calibration points recorded yet, tracking may be inaccurate"
+                    )
 
-            state.tl.start_tracking()
+                    state.device.current_alt = alt
+                    state.device.current_az = az
+                    log.info(
+                        "current_alt=%.3f, current_az=%.3f",
+                        state.device.current_alt,
+                        state.device.current_az,
+                    )
+
+                state.device.start_tracking()
             state.ra_target = None
             state.dec_target = None
         return b"0"
 
     if body.startswith("Q"):
-        if len(body) > 1 and body[1] != "#" and not state.tl.cont_mv:
-            state.tl.cont_mv_step = True
+        if len(body) > 1 and body[1] != "#" and not state.device.cont_mv:
+            state.device.cont_mv_step = True
         else:
-            state.tl.stop_tracking()
+            state.device.stop_tracking()
         return b"0#"
 
     if body in ["RG", "RC", "RM", "RS"]:
         slew_rate_dict = {"G": 1, "C": 2, "M": 3, "S": 4}
-        state.tl.cont_mv_speed = slew_rate_dict.get(body[1], state.tl.cont_mv_speed)
+        state.device.cont_mv_speed = slew_rate_dict.get(
+            body[1], state.device.cont_mv_speed
+        )
         return b"0"
 
     if body == "MS":
-        _execute_goto(state, goto_callback)
+        _execute_goto(state)
         return b"0#"
 
     if body in ["Mn", "Mw", "Me", "Ms"]:
-        if state.tl.cont_mv_step:
-            state.tl.movement_step(dir=body[1])
-            state.tl.cont_mv_step = False
+        if state.device.cont_mv_step:
+            state.device.movement_step(dir=body[1])
+            state.device.cont_mv_step = False
         else:
-            state.tl.start_cont_mv(dir=body[1])
+            state.device.start_cont_mv(dir=body[1])
         return b"0"
 
     return b"0#"
