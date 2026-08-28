@@ -62,6 +62,22 @@ Das System kann astronomische RA/DEC-Ziele empfangen, diese in Alt/Az umrechnen 
    - `logging.py`
 4. Setze `main.py` als Startskript, damit es beim Booten ausgeführt wird.
 
+### Native Alt/Az-Berechnung
+
+Die Berechnung von GMST, Präzession und Alt/Az liegt im nativen MicroPython-
+C-Modul unter `cmodules/altaz`. Für eine eigene Pico-Firmware muss der
+MicroPython-Build dieses Verzeichnis als `USER_C_MODULES` einbinden:
+
+```bash
+make -C ports/rp2 submodules
+make -C ports/rp2 BOARD=RPI_PICO_W \
+  USER_C_MODULES=/path/to/TelePilot/cmodules/altaz/micropython.cmake
+```
+
+Danach stellt die Firmware `import altaz` und `altaz.calculate(...)` bereit.
+`dev_ctrl.py` verwendet dann automatisch den C-Pfad; ohne native Firmware
+bleibt die Python-Berechnung für Host-Tests als Fallback verfügbar.
+
 ## Erste Schritte
 
 1. Starte den Pico W und warte, bis der Access Point aktiv ist.

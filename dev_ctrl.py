@@ -5,6 +5,11 @@ import stepper
 import _thread
 import time
 
+try:
+    import altaz as _altaz
+except ImportError:
+    _altaz = None
+
 # import time
 
 log = Logger("TimeLoc")
@@ -87,8 +92,36 @@ def gmst_simple(year, month, day, hour_utc):
 # -----------------------------
 # Hauptfunktionen
 # -----------------------------
+def radec_to_altaz_c(ra_deg, dec_deg, local_time, lat_deg, lon_deg, utc_offset):
+    if _altaz is None:
+        raise RuntimeError("The native altaz module is not available")
+
+    gmst, alt, az = _altaz.calculate(
+        ra_deg,
+        dec_deg,
+        local_time[0],
+        local_time[1],
+        local_time[2],
+        local_time[4],
+        local_time[5],
+        local_time[6],
+        lat_deg,
+        lon_deg,
+        utc_offset,
+    )
+    return gmst, (alt, az)
+
+
+
+
+
 def radec_to_altaz(ra_deg, dec_deg, local_time, lat_deg, lon_deg, utc_offset):
     t = local_time  # (year, month, day, weekday, hour, minutes, second, n/n)
+    if _altaz is not None:
+        return radec_to_altaz_c(
+            ra_deg, dec_deg, local_time, lat_deg, lon_deg, utc_offset
+        )
+
     # Zeit → UTC
     hour_local = time_to_decimal(t[4], t[5], t[6])
     hour_utc = hour_local - utc_offset
@@ -325,7 +358,7 @@ class dev_ctrl:
             lon_deg=self.longitude,
             utc_offset=self.utc_offset,
         )
-
+        
         self.current_ra = ra
         self.current_dec = dec
         self.current_ra_deg = ra_deg
