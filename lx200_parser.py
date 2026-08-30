@@ -183,10 +183,12 @@ def handle_command(command, state: LX200State):
 
     if body.startswith("Sr"):
         state.ra_target = body[2:]
+        state.device.target_ra = state.ra_target
         return b"1"
 
     if body.startswith("Sd"):
         state.dec_target = body[2:]
+        state.device.target_dec = state.dec_target
         return b"1"
 
     if body.startswith("SG"):

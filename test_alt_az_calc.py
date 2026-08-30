@@ -17,11 +17,11 @@ if __name__ == "__main__":
     # dec = "+08:13:06"
 
     #venus
-    # ra = "13:03:38.43"
-    # dec = "-09:43:49.4"
+    # ra = "13:11:59.43"
+    # dec = "-10:56:58.6"
 
-    ra = "18:36:57.53"
-    dec = "+38:47:25.5"
+    ra = "14:50:40.45"
+    dec = "+74:09:38.2"
 
     alt_old, az_old = dev.ra_dec_to_alt_az(ra, dec, apply_calibration=False)
 

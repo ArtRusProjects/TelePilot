@@ -200,6 +200,8 @@ class dev_ctrl:
         self.target_alt = 0
         self.target_az_raw = 0
         self.target_alt_raw = 0
+        self.target_ra = ""
+        self.target_dec = ""
         self.current_az = 0
         self.current_alt = 0
         self.current_gmst = 0
@@ -331,7 +333,8 @@ class dev_ctrl:
     def add_calibration_point(
         self, ra: str, dec: str, actual_alt: float, actual_az: float
     ):
-        ideal_alt, ideal_az = self.ideal_alt_az(ra, dec)
+        #ideal_alt, ideal_az = self.ideal_alt_az(ra, dec)
+        ideal_alt, ideal_az = self.ra_dec_to_alt_az(ra, dec, apply_calibration=False)
         self.calibration_points.append(
             {
                 "ra": ra,
@@ -462,14 +465,18 @@ class dev_ctrl:
         while not self.stop_movement:
             time.sleep(1)
             # nächste Sekunde
-            self.current_gmst = (self.current_gmst + GMST_PER_SEC) % 360
+            # self.current_gmst = (self.current_gmst + GMST_PER_SEC) % 360
 
-            lst = (self.current_gmst + self.longitude) % 360
-            ha = (lst - self.current_ra_deg) % 360
-            raw_alt, raw_az = equatorial_to_horizontal(
-                ha, self.current_dec_deg, self.latitude
-            )
-            self.target_alt, self.target_az = self.apply_calibration(raw_alt, raw_az)
+            # lst = (self.current_gmst + self.longitude) % 360
+            # ha = (lst - self.current_ra_deg) % 360
+            # raw_alt, raw_az = equatorial_to_horizontal(
+            #     ha, self.current_dec_deg, self.latitude
+            # )
+
+
+            #self.target_alt, self.target_az = self.apply_calibration(raw_alt, raw_az)
+
+            self.target_alt, self.target_az = self.ra_dec_to_alt_az(self.target_ra, self.target_dec)
 
             step_alt = angle_diff(self.target_alt, self.current_alt)  # + rest1
             step_az = angle_diff(self.target_az, self.current_az)  # + rest2
